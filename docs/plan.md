@@ -98,6 +98,26 @@ To use the toolchain, set `RUSTUP_HOME`/`CARGO_HOME` to the `rustup`/`cargo` sub
 
 ### Phase 4 — Implementation, validation, and packaging (next)
 
+**Progress (2026-10-13):**
+- **Rules module:** `engines/mohawk/csworld_game.{h,cpp}` implements the rank tables, route length, guide/almanac costs, the clue difficulty window, promotion, crook and start-country selection (bounded, with no retry loops), the battery, warrant issue/change/validation, and arrest outcome order (no warrant → wrong warrant → wrong person, matching the original's movie selection).
+- **Randomness:** an injectable `CSWorld::Random` interface allows deterministic tests.
+- **Tests:** `test/engines/csworld/game.h` adds 7 tests; `make test` runs 418/418 OK.
+- **Edge scrolling:** the engine scrolls when the mouse is in the 20-px edge strips, accelerating 1→15 px per step. It builds, but hasn't been tested with a real mouse. The step period is an assumption.
+- **Trail and witness rules:** implemented and tested (`csworld_trail.*`, 422/422 tests, 1,600 simulated real-data cases). The engine runs a real case on screen, with dev keys for flights.
+- **Interface:** layout resolved from code and implemented. A full case is playable in the engine: questioning, notebook, battery, flight popup, Digisketch warrant, arrest, outcome movie, then a new case. Verified with scripted actions and screen dumps on the user's data; it has not yet been played by a person with a mouse.
+
+**How to play the current build:**
+1. Build in `~/Downloads/scummvm-csworld`.
+2. Run `./scummvm --config=/private/tmp/witwics96-scummvm.ini csworld-win`, or use the clean `/private/tmp/witwics96-play.ini`, which has no development keys.
+3. **Controls:** click a witness, then use the three panel buttons. Hold the mouse at a screen edge (or use the arrow keys) to scroll. The globe tab (bottom-right) opens flights; the magnifier tab next to it opens the warrant. At the final stop, select the suspect and click the top strip to arrest.
+
+**Next slices:**
+1. ~~Trail and witness rules, plus tests~~ (done).
+2. ~~Witness questioning, flight screen, warrant UI, arrest with outcome movies, battery gauge~~ (done 2026-10-13).
+3. **Owner playtest of M1** with a mouse; fix what it finds.
+4. **M1 polish:** the original's save-clue-on-click, balloon mouth anchoring, and talk/lip-sync animation (`tSCR` k 5–16).
+5. **M2+:** guides, almanac, trait-evidence items, the Carmen endgame, sign-in, saves (`User.Dat`/`Fame.Dat`), and the night palette.
+
 Implement in small vertical slices. Keep tests and fixtures free of copyrighted payloads. Validate functionality on declared macOS targets, include failure handling for missing/incompatible user-provided data, and ensure packaging does not silently include ignored local files.
 
 **Exit criteria:** Reproducible build and test instructions; tested playable loop; clean package-content inspection; documented limitations and user-supplied-copy setup.

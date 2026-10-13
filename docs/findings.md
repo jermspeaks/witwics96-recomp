@@ -150,6 +150,45 @@ Summary and proposed milestone: [`gameplay-spec.md`](gameplay-spec.md).
   - **Open:** the interface bitmap also uses indices 144–245, so how the panel keeps its colors across countries is unresolved. Also unresolved: the purpose of the 200-px overhang, the blit mode semantics (0/8, flags 0x11), and whether `tSCR` bounds are relative to the witness anchor.
 - **Observed (prototype renders locations correctly, 2026-10-13):** implementing that recipe (`enterLocation`/`buildPanorama`/`drawPanoramaView`, palette ranges, two-part wrap blit) produced correct scenes. Afghanistan and France (the Eiffel Tower, at the `INTS 2000` start scroll) render with correct sky and country colors, the seam at 4092 is invisible, and the interface panel draws below with plausible colors. Checked from PNG dumps kept in `/private/tmp`. `make test` still runs 411/411 OK.
 
+- **Observed (Phase 4 rules, 2026-10-13):** Static analysis supplied the remaining M1 rule details (REA `ev_23f4ff12…`, `ev_b6dd25d8…`, `ev_e8a17441…`, `ev_f83fab73…`; addresses in the plan/agent notes).
+  - **RNG:** `0x467772(n)` returns 0..n inclusive; `0x4677cb(n)` returns 0..n−1.
+  - **Witness counts:** on-trail and off-trail stops have `3 + rand(0..2)` witnesses at ranks 0–3 and 5 at ranks 4–7. The final stop uses `{4,4,5,5,5,6,6,6}`. Witnesses persist per country.
+  - **Trail:**
+    - The route has L countries including the start, and the next trail head is picked on arrival.
+    - Male crooks travel only through countries with `BYTS 2002 == 0`, and female crooks only through those with `== 1`.
+    - A wrong country gives persistent dead-end witnesses (line 55). Its flight choices always include the departed country, the last trail country, and the head.
+  - **Flight choices:** six fixed or deduplicated entries plus distractors. Distractors are re-picked only when the trail advances, then sorted ascending.
+  - **Trait lines:** the line is chosen per witness from a voice-group rule plus a per-group toggle. Hair maps to lines `38 + {3,1,0,2,4}[hair]`, and weight to `46 + {2,1,0}[weight]`.
+  - **Persons:** there are 236. Ids 1–195 are 39 crook families × 5 hair variants; 196–220 are extras; 221 is Carmen; 222–236 are bystanders in Carmen's case. `BYTS 102` gives each voice's sex and group.
+  - **Look-alike bystanders:** chosen by a trait-match score against `{2,2,2,3,3,3,4,4}`.
+  - **Evidence:** trait evidence (`STRL/BBOX 210`) is a clickable item, with no battery cost. A probable off-by-one loses one item at ranks 0–1.
+  - **Witness actions:** 1 = destination, 2 = description, 3 = goodbye (free), 4 = arrest. Actions 1, 2 and 4 each cost 1.
+  - **Case start:** a new case starts at battery 90 (inferred: the opening flight costs 5, plus an extra 5).
+- **Observed (implementation and validation, 2026-10-13):**
+  - **Modules:** `csworld_game.*` (rules) and `csworld_trail.*` (`Investigation`: trail, flight choices, witnesses, final stop, actions). Every random search is bounded.
+  - **Unit tests:** `make test` runs 422/422 OK. That includes 4 trail tests over a synthetic world and many seeds, plus ScummVM's own `test/image/cdtoons.h`, which still passes after the CDToons change.
+  - **Real data:** a headless `csworld_simulate=200` run plays 1,600 cases (200 per rank) on the user's data in about 2 s. It takes a detour on every other stop. Every case reaches the final stop and is won with a correct warrant. Every on-trail witness's clue names the true next country. The longest case took 11 flights, and the lowest remaining battery was 35.
+  - **On screen:** the engine starts a real case and renders the start country with witnesses at their panorama positions. Dev keys 1–6 fly to the flight choices. The witness idle script and anchor offset are provisional.
+
+- **Observed (interface layout, 2026-10-13; static analysis, REA evidence in agent notes):**
+  - **Panel:** `C2K tBMP 90` at (13,319). The city map is `tBMP 250+country` at (22,363). Witness buttons are `tBMP 96–98` idle, `99–101` active and `102–104` pressed, at (211,362/395/427).
+  - **Witness actions:** hotspots (211,362,425,391) destination, (211,395,425,423) description, (211,427,425,455) goodbye. The top strip (114,325,524,355) is messages and arrest.
+  - **Popup tabs:** almanac (28,327), guides (66,327), warrant (543,327), flight (582,327).
+  - **Notebook:** (446,365,613,467), filled with color 118. The battery gauge is a 192×2 bar at (223,461) in color 32 on 245.
+  - **Fonts:** IntT12 (notebook), IntH18 (strip, flight and warrant text), IntH12, IntP10 (balloons), loaded from `SETUP16/*.FON`.
+  - **Balloons:** `tBMP 510–513` by text length (≥100/≥70/≥40/shorter); +4 for the other side.
+  - **Character scripts:** 40 per person (k + 20 is mirrored). k = 4 idle, 5–8 talking body, 9–16 mouth shapes, 17–19 eyes. Shapes are drawn at `(posX + x − frame.left, 314 − frameHeight + y)`.
+  - **Speech:** `DIALOG tWAV 30000 + 100·voice + line − 1`.
+  - **Flight popup:** `tBMP 92` at (95,15), with six rows (122,115+20i,318,135+20i) and the globe at `tBMP 310/311+` (355,63). Clicking a row travels immediately.
+  - **Warrant popup ("Digisketch"):** `tBMP 94` at (246,53), with fields (414,108+21i,564,128+21i). Values cycle by click; maxima {2,5,3,3,4}; labels `STRL 100` 1-based {16,18,23,26,29}+value. The issue/change button (414,290,564,314) is enabled only when all fields are set.
+  - **Unknown:** quit/options control, location-name label, guide buttons 1/2/10–16.
+- **Observed (playable loop, 2026-10-13):** The engine now runs the M1 loop with the interface above: speech balloons with voice audio, clue notebook, battery gauge, flight and warrant popups, arrest at the final stop, outcome movies, and a new case afterward.
+  - **Scripted checks:** `csworld_actions` runs on the user's data dumped PNGs that were checked by eye: questioning in China, the flight popup from Bolivia/Argentina, the Digisketch in Greece, and the arrest prompt in the Netherlands.
+  - **Full cases:** two complete scripted cases ran end to end — one won with a correct warrant, one lost with no warrant — each followed by a new case.
+  - **Movies:** outcome movie names exist (`WINA01–11`, `WINB01–11`, `LOSE{PWR,NOW,WRG,PER}1–5`, `LOOT00+`).
+  - **Tests:** `make test` runs 422/422 OK.
+  - **Not yet done:** interactive mouse play by a person, lip-sync/talk animation, the original's save-clue-on-click rule, balloon mouth anchoring, guides and almanac, the Carmen endgame movies, sign-in, and saves.
+
 ## Evidence and change log
 
 | Date | Observation | Source / scope | Limits |
