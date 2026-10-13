@@ -1,0 +1,6 @@
+# Bring-your-own local game copy. Never commit the original game or extracted payloads.
+/input/
+
+# macOS filesystem metadata
+.DS_Store
+._*
