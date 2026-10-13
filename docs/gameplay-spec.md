@@ -1,6 +1,6 @@
-# Gameplay and Minimum-Playable Specification (draft)
+# Gameplay and Minimum-Playable Specification
 
-Last updated: 2026-10-13. Status: **draft, Phase 2 in progress**. Code-level rules (marked *code*) come from static analysis of `Carmen32.exe`; addresses are in `findings.md`.
+Last updated: 2026-10-13. Status: **Phase 2 complete (2026-10-13)**; items in §5 are deferred past M1. Code-level rules (marked *code*) come from static analysis of `Carmen32.exe`; addresses are in `findings.md`.
 
 This describes the 1996 v3.0 Windows release's behavior in clean-room terms, as a basis for the port. Every statement is labeled **Observed**, **Inferred**, or **Unknown**; evidence is in [`findings.md`](findings.md). This document deliberately contains no game text (clues, dialogue, character names, essays) or other payload. A port must read those at runtime from the user's own copy.
 
@@ -11,10 +11,11 @@ This describes the 1996 v3.0 Windows release's behavior in clean-room terms, as 
 | Sign-in | The player types or selects a name. Names can be deleted, and progress (rank) is kept per name. | Inferred | UI string list `C2K STRL 2`; `User.Dat`/`Fame.Dat` file names; rank labels |
 | Case assignment | The Chief briefs the player: a crook has stolen a country-specific treasure, and the trail starts in that country. | Inferred | 50 loot strings, one per country (`COUNTRY STRL 2001`); `GREET*`/`LOOT*` movie templates; briefing/“Babel-Link charging” UI strings |
 | Investigate | Each stop has 3–5 witnesses, depending on rank. On the trail, a witness can give a clue to the next country and a trait clue. Off the trail, witnesses only give dead ends. | Observed (code) | §3.3 |
-| Guide | The player can ask a named guide for help. | Inferred | “Request Guide” label and guide names in `C2K STRL 100`; `GUIDES.MHK` |
-| Travel | The player picks a destination country. A flight screen shows departure/arrival, flight time, and time zones crossed. | Inferred | `C2K STRL 100` flight labels; per-country lat/long table (§3.2) |
-| Resource limit | The Babel-Link battery starts at 100 for every rank. Each flight costs 5, flat. Witness actions cost 1 each (one action is free). Other actions cost 2–5 by rank: one set, probably the guides, costs 2,2,3,3,3,4,4,5; a text-query screen costs 3,3,4,4,4,5,5,5. At 0 the case resolves as a loss. | Observed (code); guide attribution inferred | `cw_DrainBattery` |
-| Warrant | The player fills in five traits and issues a warrant. A warrant can be changed. | Inferred | Warrant/trait labels in `C2K STRL 100` |
+| Guide | Seven guide buttons share one handler, which charges 2,2,3,3,3,4,4,5 battery by rank and shows the guide's character from `GUIDES.MHK` (`tBMH` 16100 + 100·guide). What the guide then says is not yet analyzed. | Observed (code); content Unknown | `0x421a70` |
+| Travel | The player picks one of 6 destination countries and pays 5 battery, whatever the distance. A flight screen shows departure/arrival, flight time, and time zones crossed. The flight time and time-zone figures are display only. | Observed (code); display computation Unknown | `cw_TravelTo`, `cw_EnterCountry_BuildFlightChoices` |
+| Almanac | The player can type a query to look up a country fact sheet (`DATABASE BYTS 20100+country`). Each lookup costs 3,3,4,4,4,5,5,5 battery by rank. | Observed (code) | `0x423b38` → `0x424fda` |
+| Resource limit | The Babel-Link battery starts at 100 for every rank, and every cost below is taken from it. At 0 the case resolves as a loss. | Observed (code) | `cw_DrainBattery` |
+| Warrant | The player fills in five traits and issues a warrant, which then locks. **Change Warrant** unlocks it. The warrant counts as correct only if all five traits are filled and all match the crook, so a partial warrant is wrong. Issuing costs 4 battery. | Observed (code) | Handler at `0x421337`–`0x421434` |
 | Arrest | At the final location, the player must pick the crook from among innocent bystanders. A crook-specific capture animation then plays. | Inferred | Capture statements ending each clue pool; `ARREST1/2.MHK`; public description |
 | Outcome | Win (loot returned, possible promotion), or one of the lose cases in §2. | Inferred | Win/lose headline strings; `WIN*`/`LOSE*`/`ENDING*` movie templates |
 | Promotion | There are 8 ranks (0–7). Rank goes up when total wins reach 2, 4, 9, 15, 22, 30, or 39. Crooks 0–38 are chosen at random from those not yet caught. Once 39 are caught, the case is against Carmen (crook 39). Losing to Carmen reduces the caught count by 3 and re-randomizes some caught crooks. | Observed (code) | `cw_CheckPromotion`, `cw_NewCase` |
@@ -93,28 +94,39 @@ The executable's own resource labels identify: `STRL/BYTS 101` as villain names,
 | Weight | Thin, Average, Heavy |
 | Wearing | Hat, Camera, Watch, Glasses |
 
-## 4. Minimum playable milestone (proposed acceptance criteria)
+## 4. Minimum playable milestone M1 (accepted criteria)
 
-Proposed milestone **M1, one complete case**, running on macOS 14+ on Apple Silicon:
+M1 is **one complete case**, running as a `csworld` engine in a ScummVM fork on macOS 14+ on Apple Silicon. The original game data is read from the user's own copy at runtime.
 
-1. Points at a user-selected local game folder, validates that `C2K.MHK` matches the known v3.0 detection hash, and fails clearly otherwise.
-2. Starts a case following §3.3: crook, loot country, and route length by rank.
-3. Each stop shows the country background and the rank-based number of witnesses. Clues are selected as in §3.3.
-4. Travel costs 5 battery and witness actions cost 1, starting from 100. A wrong destination gives dead-end replies.
-5. The warrant can be issued and changed, and arresting at the final stop resolves to win, wrong warrant, no warrant, or wrong person.
-6. Running out of battery ends in a loss.
-7. Plays the matching `.MOV` clips if a QuickTime decoder is available. If not, it skips them without breaking the flow.
-8. Automated tests use synthetic Mohawk fixtures only, with no game bytes.
+1. **Detection:** ScummVM detects the user's folder through the existing `csworld` v3.0 entry (`C2K.MHK` hash) and refuses unknown variants with a clear message.
+2. **Case setup** (§3.3): a crook is chosen from those not yet caught; a random start/loot country is chosen; the route has 4–7 stops depending on rank; and trait evidence is placed at random stops.
+3. **Arrival at a country:** the country's background (`COUNTRY tCNT/tPAL/tBMP`) is shown. The rank-dependent number of witnesses are drawn as static first frames of their characters (`CHR* tBMH`; full `tSCR` playback is M2). Their clue and trait text is shown, selected by the §3.3 rules.
+4. **Battery:** starts at 100. Travel costs 5 and each witness question costs 1; the free and cost-4 actions follow `cw_WitnessAction`. Issuing a warrant costs 4. At 0, the battery-loss outcome triggers.
+5. **Travel:** the flight screen offers 6 choices. Reaching the trail head advances the trail; going elsewhere gives dead-end replies.
+6. **Warrant:** five trait fields with issue/change. Correctness follows the §1 rule.
+7. **Final stop:** the crook stands among look-alikes, and arrest resolves to win or to the loss outcomes in §2.
+8. **Movies:** clips are chosen as in `cw_PlayMovie`, using ScummVM's QuickTime decoder. A missing or failed movie is skipped without breaking the flow.
+9. **Tests:** automated tests use only synthetic Mohawk/STRL fixtures created by the project, never game bytes. Case setup, the clue window, battery accounting, and warrant checking are unit-tested with a seeded random generator.
 
-Later milestones (out of M1 scope): animated witness and guide characters (`tSCR` scripts), arrest animations, rank progression and save files, the almanac database, speech, the opening movie, and the 16-bit build.
+**Out of M1**, deferred to M2+ in roughly this order:
+- animated characters (`tSCR`) and speech (`DIALOG.MHK`)
+- guides
+- the almanac
+- the arrest animations
+- rank progression and saves (`Fame.Dat`/`User.Dat`)
+- the flight-time display
+- the Carmen endgame
+- the 16-bit build
 
-## 5. Open questions blocking a final spec
+Before guides are implemented, the M1 UI hides or disables their buttons.
 
-Answered on 2026-10-13 from code: case generation, battery, witness clue selection, arrest outcome, promotion, and the movie mapping (findings §Phase 2). Remaining:
+## 5. Deferred questions (not blocking M1)
 
-1. Which UI the rank-costed actions belong to: buttons 3–9 (probably guides) and the text-query screen.
-2. Where the warrant-issued and warrant-correct flags are set, and what the case-start drain of 5 pays for.
-3. The `User.Dat` field layout. Only the XOR checksum is known; `Fame.Dat` is 20-byte records plus a checksum.
-4. Flight-time and time-zone computation (`INTS 2004/2006`, `BYTS 103`). This is display only; it doesn't affect battery.
-5. `tSCR` opcodes 3, 7, 9, and 0xF, and lip-sync timing (see findings).
-6. The meaning of voice strings 53, 54, and 57, and confirmation of the trait-string order.
+Answered 2026-10-13 from code: case generation, battery costs (including guides, almanac, and warrant), witness clue selection, warrant validation, arrest outcome, promotion, and the movie mapping. Still open, each to be resolved in the milestone that needs it:
+
+1. What guides say, and how guide clue content is chosen (M2).
+2. The `User.Dat` field layout. `Fame.Dat` is 20-byte records plus an XOR checksum (M3, saves).
+3. Flight-time and time-zone display (`INTS 2004/2006`, `BYTS 103`), and what the case-start drain of 5 pays for.
+4. `tSCR` opcodes 3, 7, 9, and 0xF, and lip-sync timing (M2).
+5. The meaning of voice strings 53, 54, and 57, and confirmation of the trait-string order. Check these with a synthetic-fixture test against our own reader, not against shipped text.
+6. Witness actions 3 and 4: confirm which UI they map to.

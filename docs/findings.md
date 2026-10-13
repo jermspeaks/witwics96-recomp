@@ -66,7 +66,7 @@ This is the shared, resumable ledger for verified observations and unresolved qu
 - **Inferred:** The `_CDT*` exports and the 32-bit “CDTInit failure … QuickTime” message suggest a shared, QuickTime-backed movie/compositing layer (“CDT”) in both builds. Disassembly has not been reviewed.
 - **Unknown:** The other 14 `.MHK` archives have not been structurally checked; the meaning and game-level use of the 203 resources in the representative archive remain unknown. The complete runtime dependency set beyond the five module-reference names and the game's runtime behavior remain unresolved. No build or tests exist/run for a port at this stage.
 
-## Phase 2 — behavior and data model (in progress)
+## Phase 2 — behavior and data model (complete 2026-10-13)
 
 Summary and proposed milestone: [`gameplay-spec.md`](gameplay-spec.md).
 
@@ -103,6 +103,22 @@ Summary and proposed milestone: [`gameplay-spec.md`](gameplay-spec.md).
   - **Movies and saves:** `cw_PlayMovie` `0x429f68` maps 16 movie kinds to clip templates (`ev_42f0e5d5`; summarized in the spec). `cw_FameDatIO` `0x425322` reads and writes 20-byte records plus an XOR checksum. `User.Dat` is up to `0x2f13` bytes with an XOR checksum (`ev_a6da6e73`); its field layout is unknown.
   - **Limits:** these are static readings of a compiled binary in which Ghidra drops register arguments. Rules marked *Observed* come from code paths and immediates, not from runtime traces. Remaining unknowns are listed in `gameplay-spec.md` §5.
 
+- **Observed (Phase 2 close-out, 2026-10-13; local `llvm-objdump -d` plus REA):**
+  - **Warrant flags:** they are written only in `cw_NewCase`, which clears them, and in the warrant handler at `0x421337`–`0x421434`. **Change Warrant** clears the issued flag (`G+0xdf5`) and unlocks five fields. **Issue Warrant** counts the filled player entries (`G+0xdeb[5]`, where −1 = empty) that match the crook traits (`G+0xdf9[5]`). It sets correct (`G+0xdf7`) = 1 only if all 5 are filled and all match, then sets issued = 1. When button 6 is pressed with a warrant issued, `cw_DrainBattery(4)` is called.
+  - **Guides:** jump table `0x421504` routes buttons 3–9 to one handler, `0x421a70`. It calls `cw_DrainBattery(0x10)`, which uses the rank table 2–5, and draws a character at `0x3ee4 + 100·guide` = `GUIDES tBMH 16100–16700`. Seven buttons match the seven guide names, so these are the guides.
+  - **Almanac:** `0x423b38` (called from `0x427c90`/`0x427e4b`) copies a typed query, calls `cw_DrainBattery(0x20)` (rank table 3–5), and passes the query to `FUN_00424fda`. That function loads resource tag `'BYTS'` (`0x42595453`) with ID `0x4e84 + index` = `DATABASE BYTS 20100+`, i.e. the almanac fact sheets.
+  - Evidence: `ev_aa280531…`/`ev_dfb4ee25…` (xrefs); the remaining reads are from disassembly of the same SHA-256 image.
+  - **Limit:** the guides' dialogue content and the exact typed-query matching are not analyzed.
+
+## Phase 3 — ScummVM development setup (in progress)
+
+- **Observed (2026-10-13):** The ScummVM fork at `/Users/jeremywong/Downloads/scummvm-csworld` (branch `csworld`, base `cbc6b583…`) builds in debug mode with only the Mohawk engines, and the binary is Mach-O arm64. `--detect` on `input/` reports `mohawk:csworld` (Windows/English). `--md5 --md5-length=5000` on `C2K.MHK` reproduces `605fe883…`, matching the v3.0 entry at `engines/mohawk/detection_tables.h:924-937`. That entry is `ADGF_UNSUPPORTED`/`GAME_NOT_IMPLEMENTED`, and `metaengine.cpp` has no `GType_CSWORLD` case. The game was only read for detection and checksums, and was not launched.
+- **Side effect:** one early `--version` run, made without `--config`, created an empty `~/Library/Preferences/ScummVM Preferences`, which didn't exist before. It was deleted, and its absence was re-checked. All later runs use a temporary config.
+- **Observed (integration points, from the fork's source):**
+  - `MohawkEngine` (`mohawk.h:54`), `GraphicsManager` (`graphics.h:68`), and `View`/`Module`/`Feature` (`view.h:62–193`) are the subclass points; `cstime` is the model (`cstime.h:129`, `cstime_view.h:30/61`).
+  - Archives are loaded through `MohawkArchive` plus `getResource` (`mohawk.cpp:60`).
+  - Movies play through `VideoManager`, which has filename-based `playMovie` overloads (`video.cpp:195/351`) for the loose `MOVIES/*.MOV` files.
+
 ## Evidence and change log
 
 | Date | Observation | Source / scope | Limits |
@@ -133,8 +149,8 @@ Summary and proposed milestone: [`gameplay-spec.md`](gameplay-spec.md).
 
 1. **Answered for Phase 1 (2026-10-12):** What release/build is represented? Both builds identify as v3.0. The supplied read-me is dated 1996-04-24, and the NE module description is `Carmen World 3.0`. `Carmen32.exe` was extracted from `ARCHIVE.C2K` (SHA-256 `c476e52d…e646`) and is a Borland-built PE32 i386 GUI image; its resource timestamp is 1996-04-29. The 16-bit build is the `CARMEN` NE (SHA-256 `246b6351…f83e`). Still unknown: whether the media is authentic, and the exact disc/SKU.
 2. **Partially answered:** What data/resource formats and dependencies are required? The read-me, 16-bit setup files, and executable strings declare QuickTime 2.1 or higher; the `.MOV`-named files are QuickTime-classified. Executable strings name the listed `.MHK` resources and `SYSTEM.MHK`; all 15 loose `.MHK` files begin with `MHWK`, with `RSRC` observed in the representative header. A bounded structural check of `DATABASE.MHK`, using the upstream ScummVM Mohawk layout, validated its version-1.0 resource directory, table bounds, 203 file-table entries, six resource types, 203 resource entries, and data ranges. This establishes container-level structure for one archive, not semantic resource validity or game use; the other 14 archives remain unchecked. Both executables also name `SYSTEM.MHK`, `MOHAWK.INI`, `MIDIMAP.DAT`, `QTIM32.DLL`, and `CMGR32.DLL`, none of which were found under `input/` by filename. Next: confirm how those names are opened by decompiling the call sites in `Carmen32.exe`.
-3. **Partially answered (see `gameplay-spec.md`):** What interactions and state transitions define a minimally playable game, and which need runtime observation? Static game-code analysis is now unblocked: Ghidra loads the 32-bit `Carmen32.exe`, and win16ne parses (and can disassemble) the 16-bit NE. Next: use Ghidra to decompile the `WinMain`/startup path, `.MHK` open sites, and the movie-name template users in `Carmen32.exe`. Request runtime testing only if static evidence cannot answer a specific question.
-4. **Decided (owner, 2026-10-13):** Implement the port as a `csworld` engine inside ScummVM. ScummVM detects this exact build but has no engine for it. It already provides Mohawk archive, bitmap, palette, and sound decoding, QuickTime playback, and macOS arm64 builds, and the project's GPLv3 license is compatible. Still open: where the ScummVM fork lives, which upstream revision to base on, and whether to submit upstream.
+3. **Answered for M1 (2026-10-13, see `gameplay-spec.md` §4; deferred items in §5):** What interactions and state transitions define a minimally playable game, and which need runtime observation? Static game-code analysis is now unblocked: Ghidra loads the 32-bit `Carmen32.exe`, and win16ne parses (and can disassemble) the 16-bit NE. Next: use Ghidra to decompile the `WinMain`/startup path, `.MHK` open sites, and the movie-name template users in `Carmen32.exe`. Request runtime testing only if static evidence cannot answer a specific question.
+4. **Decided (owner, 2026-10-13):** Implement the port as a `csworld` engine inside ScummVM. ScummVM detects this exact build but has no engine for it. It already provides Mohawk archive, bitmap, palette, and sound decoding, QuickTime playback, and macOS arm64 builds, and the project's GPLv3 license is compatible. Fork location and base revision chosen 2026-10-13 (see Phase 3). Upstream submission is still the owner's call.
 5. **Policy established; rights unknown:** What local-only asset workflow and distributable content are permissible? Keep all supplied and derived proprietary payloads out of Git; do not assume redistribution rights.
 6. **Owner decision (2026-10-12):** The target is Apple Silicon (arm64) on recent macOS, with 14+ proposed as the minimum. Intel support is out of scope unless the owner revisits it. Accessibility and input expectations remain open.
 

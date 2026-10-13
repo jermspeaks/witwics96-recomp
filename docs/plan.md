@@ -17,8 +17,8 @@ Create a playable macOS port of the 1990s Windows game identified by the project
 - [x] Establish repository agent guidance and the local game-copy ignore rule.
 - [x] Record the initial metadata-only inventory and open questions.
 - [x] Identify the supplied release/build and map its executables, data files, and runtime dependencies (Phase 1, closed 2026-10-12; unknowns carried forward in `docs/findings.md`).
-- [ ] **In progress:** Describe the core gameplay loop and define a testable minimum playable scope. A draft is in `docs/gameplay-spec.md`, with 6 open code questions.
-- [ ] Choose and document the macOS implementation and local asset-loading strategy.
+- [x] Describe the core gameplay loop and define a testable minimum playable scope (Phase 2, closed 2026-10-13; M1 criteria in `docs/gameplay-spec.md` §4).
+- [ ] **In progress:** Choose and document the macOS implementation and local asset-loading strategy. The owner chose a ScummVM `csworld` engine; the fork builds and detects the game (Phase 3). The thin prototype is next.
 - [ ] Implement the smallest end-to-end playable slice.
 - [ ] Add automated tests/fixtures that do not contain copyrighted game payloads.
 - [ ] Verify build/run behavior on the declared macOS target(s), documenting environment and gaps.
@@ -48,7 +48,7 @@ To use the toolchain, set `RUSTUP_HOME`/`CARGO_HOME` to the `rustup`/`cargo` sub
 
 **Carried-forward unknowns:** Media authenticity; where `SYSTEM.MHK`, `MOHAWK.INI`, `MIDIMAP.DAT`, `QTIM32.DLL`, and `CMGR32.DLL` come from; the structure of the other 14 `.MHK` files; and all runtime behavior.
 
-### Phase 2 — Behavior and playable-scope definition (in progress)
+### Phase 2 — Behavior and playable-scope definition (complete, 2026-10-13)
 
 **Questions:** What is the essential game loop, what state/resources drive it, and what can be reliably tested?
 
@@ -58,20 +58,29 @@ To use the toolchain, set `RUSTUP_HOME`/`CARGO_HOME` to the `rustup`/`cargo` sub
 
 **Progress (2026-10-13):** Code-level rules for case generation, battery, witness clues, arrest, promotion, and movie selection are recorded in findings and spec §§1–3. The `tSCR` framing is validated on 3,820 scripts. ScummVM's Mohawk `View`/`Feature` framework already loads `tCNT`, `tSCR`, and `tBMH`.
 
-**Next actions:**
-1. Close the remaining spec §5 items that M1 needs: where the warrant flags are set, and which UI the rank-costed actions belong to. `User.Dat` layout, flight-time display, and the `tSCR` opcodes not yet understood can move to later milestones.
-2. Then finalize the M1 acceptance criteria and mark Phase 2 complete.
-3. Phase 3 default (owner may override): a separate ScummVM fork in a sibling folder on a `csworld` branch, following upstream conventions. This repo keeps docs, research helpers, and synthetic fixtures.
+**Closed 2026-10-13:** The warrant rules, guide buttons, and almanac lookup were resolved from code (see findings). The M1 acceptance criteria are final in `gameplay-spec.md` §4, and deferred questions are mapped to later milestones in §5. Validation is static analysis only. The original game was not run, and no port code or tests exist yet.
 
-Derive candidate behavior from static evidence; use runtime observation only for questions static evidence cannot answer and only with explicit, bounded scope. Record observed behavior separately from inferred behavior. Define a small playable milestone, controls, save/state needs, and asset-loading boundary.
-
-**Exit criteria:** A written minimum-playable specification with traceable evidence and explicit unknowns, plus acceptance criteria that do not require bundling original assets.
-
-### Phase 3 — macOS design and prototype (blocked on Phase 2)
+### Phase 3 — macOS design and prototype (in progress)
 
 **Questions:** Which technology and rendering/input/audio approach fit the verified formats and target macOS versions? Target: Apple Silicon, recent macOS (owner, 2026-10-12). **Decision (owner, 2026-10-13): option A.** Build a clean-room `csworld` engine inside ScummVM (GPLv3). It reuses ScummVM's Mohawk archive, bitmap, palette, and sound support, its QuickTime playback, and its macOS packaging. The rejected alternative was a standalone native Swift/SDL app.
 
-**Next actions:** Compare the simplest viable clean-room/native or compatibility-oriented options against established requirements. Build a thin prototype with synthetic/test-owned assets before implementing game-specific behavior. Decide how a user points the program at local game data without copying that data into the repository or package.
+**Development setup (2026-10-13, verified):**
+- **Fork:** a ScummVM clone at `/Users/jeremywong/Downloads/scummvm-csworld` (`--filter=blob:none`, full history), on local branch `csworld` based on `master` `cbc6b583c8e71d885f16ebe6b2b143430b1243ca`. It is outside this repository, has no commits, and has not been pushed or forked on GitHub.
+- **Build:** `./configure --disable-all-engines --enable-engine=mohawk,cstime,myst,mystme,riven --enable-debug && make -j$(sysctl -n hw.ncpu)` succeeded in about 23 s on arm64 (SDL 2.32.70 via Homebrew `sdl2-compat`). The 34 warnings are all in OpenGL shader code, none in mohawk.
+- **Detection:** `./scummvm --config=/private/tmp/witwics96-scummvm.ini --detect --path=<repo>/input` reports `mohawk:csworld  Where in the World is Carmen Sandiego? (Windows/English)`. Starting it would fail with `GAME_NOT_IMPLEMENTED`, because there is no `GType_CSWORLD` case in `metaengine.cpp`.
+- **Config:** always pass `--config=/private/tmp/...` so the user's real ScummVM preferences aren't created or touched.
+- **Asset loading:** the user adds their own game folder in ScummVM. Nothing is copied into the fork or the package.
+
+**Next actions:**
+1. Wire a `csworld` subengine following `cstime`:
+   - `configure.engine`: add `csworld` to mohawk's subengines, plus an `add_engine csworld … no` line.
+   - `module.mk`: add an `ifdef ENABLE_CSWORLD` block.
+   - `metaengine.cpp`: add a `GType_CSWORLD` case.
+   - New files: `csworld.{h,cpp}` (a `MohawkEngine` subclass), `csworld_graphics.*` (a `GraphicsManager` subclass), and `csworld_view.*` (`View`/`Module`).
+   - Keep `ADGF_UNSUPPORTED` until M1 works.
+2. Prototype: open all 15 `.MHK` archives with `MohawkArchive`, show one country background (`tCNT`/`tPAL`/`tBMP`) and one static witness frame (`tBMH`), and play `Opening.MOV` with `VideoManager`. Confirm this by launching ScummVM on the user's own data. This is the first runtime use of the game data; the original executable is not run.
+3. Add parsers for the game's data resources (`STRL`, `BYTS`, `INTS`) with unit tests on synthetic fixtures, then implement the M1 rules in `gameplay-spec.md` §4.
+4. Owner's choice, recorded but not needed yet: publish the fork on GitHub and aim for upstream submission. Follow ScummVM code style in the meantime.
 
 **Exit criteria:** Documented architecture decision, buildable prototype, and repeatable development setup.
 
