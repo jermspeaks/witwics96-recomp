@@ -16,8 +16,8 @@ Create a playable macOS port of the 1990s Windows game identified by the project
 
 - [x] Establish repository agent guidance and the local game-copy ignore rule.
 - [x] Record the initial metadata-only inventory and open questions.
-- [ ] **In progress:** Identify the supplied release/build and map its executables, data files, and runtime dependencies. The supplied read-me documents v3.0 (dated 1996-04-24); 16-bit setup files identify the NE game candidate and the 32-bit installer declares `Carmen32.exe` inside `ARCHIVE.C2K`. The archive member directory has been listed, but the executable bytes/type and installed-file mapping remain unverified.
-- [ ] Describe the core gameplay loop and define a testable minimum playable scope.
+- [x] Identify the supplied release/build and map its executables, data files, and runtime dependencies (Phase 1, closed 2026-10-12; unknowns carried forward in `docs/findings.md`).
+- [ ] **Next:** Describe the core gameplay loop and define a testable minimum playable scope.
 - [ ] Choose and document the macOS implementation and local asset-loading strategy.
 - [ ] Implement the smallest end-to-end playable slice.
 - [ ] Add automated tests/fixtures that do not contain copyrighted game payloads.
@@ -32,29 +32,33 @@ Create a playable macOS port of the 1990s Windows game identified by the project
 
 **Validation:** Confirm `input/` is ignored and that no game files are staged/tracked. At this stage no source code, tests, build system, or implementation approach has been established.
 
-### Phase 1 — Static artifact inventory (in progress)
+### Phase 1 — Static artifact inventory (complete, 2026-10-12)
 
-**Questions:** What exact build is represented? Which files are the game executable, resources, data, codecs, or installers? What host/runtime assumptions are supported by static evidence?
+**Outputs:** Both executables are identified in `docs/findings.md` with hashes. The 16-bit build is NE `input/SETUP16/CARMEN`, module `CARMEN`, “Carmen World 3.0”. The 32-bit build is `Carmen32.exe`: PE32 i386, Borland C++, extracted with owner approval from `ARCHIVE.C2K`. The ledger also covers `.MHK` (Mohawk) and `.MOV` (QuickTime) data identities, static imports, dynamically named DLLs (`QTIM32.DLL`, `CMGR32.DLL`, `DSOUND.DLL`), and the referenced config/data names.
 
-**Observed progress (2026-10-12):** The supplied `input/README.TXT` identifies itself as a v3.0 read-me dated 1996-04-24 and documents Windows 3.1/Windows 95 versions and QuickTime 2.1 usage. `input/SETUP16/CARMEN.INF` and `CARMEN.BDF` map the 558,608-byte `input/SETUP16/CARMEN` file to installed `carmen.exe`; the file is identified as a Windows 3.x NE executable. A read-only header/table inspection found 29 in-range segment records and five module-reference names (`GDI`, `KERNEL`, `MMSYSTEM`, `USER`, `WIN87EM`); see `docs/findings.md` for scope and limitations. These setup declarations plus file identity make it a strong 16-bit game-executable candidate, not authenticated runtime evidence. `input/SETUP.CFG` selects 16-bit and 32-bit installer programs; `input/SETUP32/SETUP32.INI` declares installed `Carmen32.exe` from `ARCHIVE.C2K`. A built, reviewed `unshieldv3` list-only command found 20 archive entries, including `Carmen32.exe` at 425,504 bytes (directory metadata only); no payload was extracted. One representative `input/DATABASE.MHK` was structurally checked read-only against the upstream ScummVM Mohawk parser layout: version 1.0, 203 file-table entries, six type entries, 203 resource entries, and valid in-file table/data bounds. This does not interpret resources or establish game behavior.
+**Local analysis state (outside Git):**
+- `/private/tmp/witwics96-unshieldv3/` holds unshieldv3 at `4e5700f…` and its build.
+- `/private/tmp/witwics96-win16ne/checkout/` holds win16ne at `541a16c…`.
+- `/private/tmp/witwics96-rust/` holds a scoped rustup/cargo toolchain, the win16ne build in `target/release/win16ne`, the `extract-one` helper, and `extracted/Carmen32.exe`.
+- `/private/tmp/witwics96-verify/` holds a reproduced `Carmen32.exe` (same SHA-256) and the win16ne output in `ne-describe.txt`.
 
-**Tool status:** The global `reverse-engineer-anything` skill file (version 40) was read directly; its registry lookup is unavailable in this session, while REA tools are connected. REA 6.4.0 reports Ghidra 12.1.4 on macOS arm64 as available; Hopper is unavailable. Ghidra `open_binary` and Apple LLVM `objdump` reject the NE candidate. `bsdtar` cannot list the InstallShield Z archive. `unshieldv3` was fetched at commit `541a16ca7b38b2fdf466274b4bf53d18528d743a`, source-reviewed, and built in `/private/tmp` (binary SHA-256 `23b83babcc398c6206ec15ac52d1446779a5d3f12987222b8d80618c6b6918f3`); its read-only `info` and `list -v` operations worked on `ARCHIVE.C2K`. `win16ne` source was fetched at commit `4e5700fb97ba9f0338b49c1031834ce42177f265` and reviewed, but `rustc` and `cargo` are absent, so it was not built or run. Its locked crate dependencies have not been downloaded. Hopper’s FAQ documents Mach-O, PE, and ELF, not NE; installing Hopper is not currently recommended for this blocker.
+To use the toolchain, set `RUSTUP_HOME`/`CARGO_HOME` to the `rustup`/`cargo` subdirectories. `/private/tmp` may be cleared on reboot. If it is, re-create these from the commits and hashes in the findings.
 
-**Next actions:**
-1. The InstallShield Z archive has been listed without extraction. Ask before extracting the single `Carmen32.exe` member to a temporary analysis directory; inspect it statically only if authorized. Do not run setup or include proprietary payloads in Git.
-2. Ask whether to install a temporary Rust toolchain and download `win16ne`'s locked Cargo dependencies into `/tmp`; if approved, build and run it only against `input/SETUP16/CARMEN` for static parsing/disassembly. No global PATH/config changes; keep tool files outside the repository.
-3. If resource-index detail is needed for scope, extend the read-only structural check to one additional `.MHK` only after identifying a concrete question; do not bulk extract or print payloads. The current check structurally validates only `DATABASE.MHK`.
-4. Record exact hashes, source paths, tool identity, provider limitations, and unanswered questions in `docs/findings.md`; keep Phase 1 open until its exit criteria are met.
+**Validation performed:** The `Carmen32.exe` extraction was reproduced byte-for-byte (SHA-256 `c476e52d…e646`, 425,504 bytes, matching the archive directory). `file` reports PE32 i386 GUI. REA `open_binary`, `binary_overview`, and `inspect_pe_resources` succeeded. win16ne exited 0 on the NE file with no stderr. Input hashes for `CARMEN`, `ARCHIVE.C2K`, and `DATABASE.MHK` are unchanged. Nothing was executed or installed, and there are no port tests.
 
-**Validation performed:** `git check-ignore -v input` confirms `/input/` is ignored; `git ls-files -- input` returned no tracked paths. Read-only `find`/`file`, `od`, `strings`, and `shasum` checks remain as above. The InstallShield archive header matches the documented v3 signature; `bsdtar -tf` fails, while the source-reviewed `unshieldv3 info` and `list -v` successfully listed 20 entries without decompression or extraction. Its CMake build succeeded with AppleClang 21; a CMake deprecation warning and non-fatal `xcrun` cache permission warning appeared. The Mohawk structural check of `DATABASE.MHK` passed after correcting the harness's first mistaken 12-byte table-entry assumption to the 10-byte layout documented in upstream ScummVM. `win16ne` source and locked manifest were reviewed but could not be built because Rust/Cargo are unavailable. The three input artifact hashes remain unchanged. No game/setup execution, archive extraction, or tests for a port were performed.
+**Carried-forward unknowns:** Media authenticity; where `SYSTEM.MHK`, `MOHAWK.INI`, `MIDIMAP.DAT`, `QTIM32.DLL`, and `CMGR32.DLL` come from; the structure of the other 14 `.MHK` files; and all runtime behavior.
 
-**Exit criteria:** Findings document identifies supported artifact/build evidence, the game executable and key data-file identities, dependency evidence and limits, plus unresolved format/runtime questions. The 32-bit executable is currently only an installer declaration within an uninspected archive. All payloads remain untracked. Current evidence is not sufficient to exit Phase 1.
-
-### Phase 2 — Behavior and playable-scope definition (blocked on Phase 1)
+### Phase 2 — Behavior and playable-scope definition (next)
 
 **Questions:** What is the essential game loop, what state/resources drive it, and what can be reliably tested?
 
-**Next actions:** Derive candidate behavior from static evidence; use runtime observation only for questions static evidence cannot answer and only with explicit, bounded scope. Record observed behavior separately from inferred behavior. Define a small playable milestone, controls, save/state needs, and asset-loading boundary.
+**Next actions:**
+1. Open `/private/tmp/witwics96-verify/Carmen32.exe` in REA/Ghidra. Use `search_strings` + `xrefs` to find the code that uses `MOHAWK.INI`, `SYSTEM.MHK`, the `.MHK` names, the movie templates (`%sLOCN%d.MOV` and others), `Fame.Dat`/`User.Dat`, and `CDTInit`. Then decompile those procedures to recover startup, resource loading, and the case/travel/warrant/arrest loop. Record Evidence IDs.
+2. Determine whether `Carmen32.cfg`/`mohawk.w32` config values (not yet extracted) are needed. Ask before extracting any further archive member.
+3. Use the 16-bit NE (win16ne `-d`) only to cross-check behavior where the 32-bit build is ambiguous.
+4. Extend the Mohawk structural check to the other `.MHK` files and list resource types per file (metadata only), so data needs can be mapped to gameplay.
+
+Derive candidate behavior from static evidence; use runtime observation only for questions static evidence cannot answer and only with explicit, bounded scope. Record observed behavior separately from inferred behavior. Define a small playable milestone, controls, save/state needs, and asset-loading boundary.
 
 **Exit criteria:** A written minimum-playable specification with traceable evidence and explicit unknowns, plus acceptance criteria that do not require bundling original assets.
 
@@ -74,7 +78,7 @@ Implement in small vertical slices. Keep tests and fixtures free of copyrighted 
 
 ## Risks and unresolved decisions
 
-See `docs/findings.md` for the detailed open-question list. Immediate blockers are incomplete build identity, unverified resource formats and runtime behavior, and the lack of a runnable local NE analyzer for the identified 16-bit game-executable candidate (Ghidra and the checked `objdump` route reject it; Hopper is unavailable and its FAQ does not document NE support). The InstallShield Z member directory is listed, but the declared 32-bit `Carmen32.exe` bytes/type remain unverified because no member has been extracted. The macOS target/implementation strategy is undecided. Legal rights to redistribute the game or its assets are not established; do not include those payloads.
+See `docs/findings.md` for the detailed open-question list. The 32-bit `Carmen32.exe` is now extracted and loadable in Ghidra, and win16ne parses the 16-bit NE, so static code analysis is no longer blocked. Remaining risks are unverified resource semantics and runtime behavior, plus unlocated dependencies (`SYSTEM.MHK`, `MOHAWK.INI`, `QTIM32.DLL`, `CMGR32.DLL`). The macOS target/implementation strategy is undecided. Legal rights to redistribute the game or its assets are not established; do not include those payloads.
 
 ## Session handoff checklist
 
