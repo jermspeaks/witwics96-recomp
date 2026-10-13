@@ -110,7 +110,7 @@ Summary and proposed milestone: [`gameplay-spec.md`](gameplay-spec.md).
   - Evidence: `ev_aa280531…`/`ev_dfb4ee25…` (xrefs); the remaining reads are from disassembly of the same SHA-256 image.
   - **Limit:** the guides' dialogue content and the exact typed-query matching are not analyzed.
 
-## Phase 3 — ScummVM development setup (in progress)
+## Phase 3 — ScummVM development setup and prototype (complete 2026-10-13)
 
 - **Observed (2026-10-13):** The ScummVM fork at `/Users/jeremywong/Downloads/scummvm-csworld` (branch `csworld`, base `cbc6b583…`) builds in debug mode with only the Mohawk engines, and the binary is Mach-O arm64. `--detect` on `input/` reports `mohawk:csworld` (Windows/English). `--md5 --md5-length=5000` on `C2K.MHK` reproduces `605fe883…`, matching the v3.0 entry at `engines/mohawk/detection_tables.h:924-937`. That entry is `ADGF_UNSUPPORTED`/`GAME_NOT_IMPLEMENTED`, and `metaengine.cpp` has no `GType_CSWORLD` case. The game was only read for detection and checksums, and was not launched.
 - **Side effect:** one early `--version` run, made without `--config`, created an empty `~/Library/Preferences/ScummVM Preferences`, which didn't exist before. It was deleted, and its absence was re-checked. All later runs use a temporary config.
@@ -118,6 +118,37 @@ Summary and proposed milestone: [`gameplay-spec.md`](gameplay-spec.md).
   - `MohawkEngine` (`mohawk.h:54`), `GraphicsManager` (`graphics.h:68`), and `View`/`Module`/`Feature` (`view.h:62–193`) are the subclass points; `cstime` is the model (`cstime.h:129`, `cstime_view.h:30/61`).
   - Archives are loaded through `MohawkArchive` plus `getResource` (`mohawk.cpp:60`).
   - Movies play through `VideoManager`, which has filename-based `playMovie` overloads (`video.cpp:195/351`) for the loose `MOVIES/*.MOV` files.
+
+- **Observed (thin prototype, 2026-10-13; first runtime use of the game data, by our own code only):**
+  - **Fork changes (uncommitted):** the fork now has a `csworld` subengine. The edits are to `configure.engine`, `module.mk`, and `metaengine.cpp`, plus new files `csworld.{h,cpp}` and `csworld_graphics.{h,cpp}`.
+  - **Detection entry:** the v3.0 entry is now `ADGF_UNSTABLE` instead of `ADGF_UNSUPPORTED`; v3.5 is unchanged.
+  - **Build:** configured with `--enable-engine=mohawk,cstime,csworld,myst,mystme,riven --enable-debug`; builds in about 21 s.
+  - **Test method:** runs use a temporary config (`/private/tmp/witwics96-scummvm.ini`). Development-only options (`csworld_country`, `csworld_scroll`, `csworld_bitmap`, `csworld_movie`, `csworld_movie_dump_ms`, `csworld_dump`) render a scene, write a PNG to `/private/tmp/witwics96-shots/`, and quit. These PNGs contain game imagery and must stay outside Git. The original executable was not run.
+  - **Archives and images:** all 15 `.MHK` archives open with ScummVM's `MohawkArchive`. Country `tBMP` resources decode with the stock `MohawkBitmap` as 2048-wide, 8-bit, LZ-packed panoramas (heights 310 or 227). `tPAL` is the standard `(start, count, RGBx…)` format; countries use 236 colors from index 10, continents 134 from index 10.
+  - **Characters:** `CHR1 tBMH 30000` decodes as a 112-image compound group. Drawing shape `n−1` of that group, at the `tSCR` bounds origin plus the opcode-6 offset with index 0 transparent, puts a witness correctly on the ground in the Afghanistan scene. This is visual confirmation of the inferred `tSCR` semantics.
+  - **Layers:** country bitmaps contain transparent regions, and continent bitmaps (`1900+10k`) are sky/backdrop strips. Scenes are therefore composed from several layers; the composition rules are being reverse-engineered.
+  - **Cinepak movies:** 216 of the 218 `.MOV` files are Cinepak video with raw PCM audio. ScummVM decodes them, for example `GREET01.MOV` (the Chief's briefing). They require a true-color screen: the mohawk `VideoManager` refuses to convert to 8-bit unless it dithers, and dithering to the game palette produced black frames. The engine therefore uses an RGBA32/RGB565 screen and composes 8-bit art in a back buffer that is converted to true color when presented.
+  - **CDToons movies:** `OPENING.MOV` and `40CARAR8.MOV` use the `QkBk` codec, which is CDToons. ScummVM's CDToons decoder (`image/codecs/cdtoons.cpp`, built for `cstime`) reports 12 unknown bytes after a block, then calls fatal `error()` for a 12-byte overrun. This game's CDToons is a variant that needs decoder work, so the prototype initially didn't auto-play the opening.
+- **Observed (CDToons fix, 2026-10-13):**
+  - **Cause:** a `-d9` trace showed the failure on the third frame, in a `Diff` entry. The entry's size field (44) counted the payload plus only the last 8 header bytes, whereas ScummVM's parser assumes the full 20-byte header is counted. The parser took 24 payload bytes, the renderer needed 36 (`2 + lineSize 34`), and 12 bytes were left over.
+  - **Fix:** `image/codecs/cdtoons.cpp` now checks, for each `Diff` block, which convention (20 or 8 header bytes counted) exactly tiles the block, and uses that one. The two conventions can't both tile a non-empty block, so `cstime` files keep the existing behavior. That is untested, since we have no `cstime` data.
+  - **Result:** `OPENING.MOV` and `40CARAR8.MOV` now play to the end with no warnings or errors. Frames were checked at 3 s (the Brøderbund logo) and 20 s (the title card). Opening playback is enabled again by default.
+
+- **Observed (data layer and tests, 2026-10-13):**
+  - **Parsers:** `engines/mohawk/csworld_data.{h,cpp}` has stream-based parsers for `STRL` (a count byte, then NUL-terminated strings), `"country,difficulty,text"` clue lines, the 40×5 crook table, and geo pairs, plus a `GameData` holder. `GameData::load` lives in `csworld.cpp`, so the parser object links without the engine.
+  - **Real data:** a run with the user's copy loads 58 country-list entries, 40 crooks, and 40 voice lists (each with at least 56 lines), with no parser warnings.
+  - **Tests:** `test/engines/csworld/data.h` has 5 CxxTest cases using synthetic fixtures only. They are registered in `test/module.mk` under `ENABLE_CSWORLD` and link `libmohawk.a`. `make test` runs 411/411 tests OK with no warnings.
+  - **Index convention:** the original's voice-line indices are 1-based. Dead end = 55 and final stop = 56, confirmed by position in the data, so `GameData::getVoiceLine` takes 1-based indices. Hair trait phrasing order (black, brown, red, blonde, gray) differs from the warrant label order (blonde, brown, black, red, gray); this is the remap the code applies.
+
+- **Observed (scene composition, 2026-10-13; static analysis of `Carmen32.exe` plus local pixel histograms of decoded bitmaps):**
+  - **Scene builder:** `0x41ac5e(country)` draws into an off-screen 4292×316 buffer. It fills with index 245, then draws the sky (`1900 + 10·k`, k random 0–6 from an LCG) as two opaque 2048-wide halves at x 0/2048. Next it draws the country (`2000 + 100·c`) halves at x 0/2048, with y = 308 − height and index 0 transparent. Finally it fills y 308–315 with index 239. The two country bitmaps are the left and right halves of one 4096-px panorama, not parallax layers. `BYTS 2001` is not used for the sky, and its meaning is still unknown.
+  - **Screen split:** the panorama is screen rows 0–315; the interface is 316–479, with `C2K tBMP 90` (614×161) at (13, 319).
+  - **Scrolling:** the view wraps at 4092 and is blitted in two parts across the seam. There is no parallax. The player scrolls with mouse edge hotspots 20 px wide, accelerating 1→15 px per step. The initial scroll per country is `COUNTRY INTS 2000[c]`.
+  - **Palette ranges:** interface `C2K tPAL 90` 16–127; sky 13–15 and 128–143; country 10–12 and 144–245; entry 245 black. Histograms of the decoded art match these ranges exactly. A night palette blend exists (`0x41a977`).
+  - **Witness placement:** witnesses are positioned in panorama coordinates, so they scroll with it. The anchor is y = 314; x comes from N equal segments of 4092 (slot 0 at x = 80, others randomized within their segment). Not implemented in the prototype yet.
+  - **Evidence:** `ev_d9b006db…`, `ev_4675053e…`, `ev_ad9f89ed…`, `ev_9118a94c…`, `ev_36cdf744…`, `ev_8be37fe2…`, `ev_90d242a4…`, `ev_86107ab1…`, `ev_59654042…`, `ev_e26cc18d…`.
+  - **Open:** the interface bitmap also uses indices 144–245, so how the panel keeps its colors across countries is unresolved. Also unresolved: the purpose of the 200-px overhang, the blit mode semantics (0/8, flags 0x11), and whether `tSCR` bounds are relative to the witness anchor.
+- **Observed (prototype renders locations correctly, 2026-10-13):** implementing that recipe (`enterLocation`/`buildPanorama`/`drawPanoramaView`, palette ranges, two-part wrap blit) produced correct scenes. Afghanistan and France (the Eiffel Tower, at the `INTS 2000` start scroll) render with correct sky and country colors, the seam at 4092 is invisible, and the interface panel draws below with plausible colors. Checked from PNG dumps kept in `/private/tmp`. `make test` still runs 411/411 OK.
 
 ## Evidence and change log
 

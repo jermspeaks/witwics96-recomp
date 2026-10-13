@@ -18,8 +18,8 @@ Create a playable macOS port of the 1990s Windows game identified by the project
 - [x] Record the initial metadata-only inventory and open questions.
 - [x] Identify the supplied release/build and map its executables, data files, and runtime dependencies (Phase 1, closed 2026-10-12; unknowns carried forward in `docs/findings.md`).
 - [x] Describe the core gameplay loop and define a testable minimum playable scope (Phase 2, closed 2026-10-13; M1 criteria in `docs/gameplay-spec.md` §4).
-- [ ] **In progress:** Choose and document the macOS implementation and local asset-loading strategy. The owner chose a ScummVM `csworld` engine; the fork builds and detects the game (Phase 3). The thin prototype is next.
-- [ ] Implement the smallest end-to-end playable slice.
+- [x] Choose and document the macOS implementation and local asset-loading strategy (Phase 3, closed 2026-10-13: ScummVM `csworld` engine; prototype renders locations and plays movies).
+- [ ] **Next:** Implement the smallest end-to-end playable slice (M1, `gameplay-spec.md` §4).
 - [ ] Add automated tests/fixtures that do not contain copyrighted game payloads.
 - [ ] Verify build/run behavior on the declared macOS target(s), documenting environment and gaps.
 - [ ] Document setup, bring-your-own-copy requirements, known limitations, and packaging policy.
@@ -60,7 +60,7 @@ To use the toolchain, set `RUSTUP_HOME`/`CARGO_HOME` to the `rustup`/`cargo` sub
 
 **Closed 2026-10-13:** The warrant rules, guide buttons, and almanac lookup were resolved from code (see findings). The M1 acceptance criteria are final in `gameplay-spec.md` §4, and deferred questions are mapped to later milestones in §5. Validation is static analysis only. The original game was not run, and no port code or tests exist yet.
 
-### Phase 3 — macOS design and prototype (in progress)
+### Phase 3 — macOS design and prototype (complete, 2026-10-13)
 
 **Questions:** Which technology and rendering/input/audio approach fit the verified formats and target macOS versions? Target: Apple Silicon, recent macOS (owner, 2026-10-12). **Decision (owner, 2026-10-13): option A.** Build a clean-room `csworld` engine inside ScummVM (GPLv3). It reuses ScummVM's Mohawk archive, bitmap, palette, and sound support, its QuickTime playback, and its macOS packaging. The rejected alternative was a standalone native Swift/SDL app.
 
@@ -71,20 +71,32 @@ To use the toolchain, set `RUSTUP_HOME`/`CARGO_HOME` to the `rustup`/`cargo` sub
 - **Config:** always pass `--config=/private/tmp/...` so the user's real ScummVM preferences aren't created or touched.
 - **Asset loading:** the user adds their own game folder in ScummVM. Nothing is copied into the fork or the package.
 
-**Next actions:**
-1. Wire a `csworld` subengine following `cstime`:
-   - `configure.engine`: add `csworld` to mohawk's subengines, plus an `add_engine csworld … no` line.
-   - `module.mk`: add an `ifdef ENABLE_CSWORLD` block.
-   - `metaengine.cpp`: add a `GType_CSWORLD` case.
-   - New files: `csworld.{h,cpp}` (a `MohawkEngine` subclass), `csworld_graphics.*` (a `GraphicsManager` subclass), and `csworld_view.*` (`View`/`Module`).
-   - Keep `ADGF_UNSUPPORTED` until M1 works.
-2. Prototype: open all 15 `.MHK` archives with `MohawkArchive`, show one country background (`tCNT`/`tPAL`/`tBMP`) and one static witness frame (`tBMH`), and play `Opening.MOV` with `VideoManager`. Confirm this by launching ScummVM on the user's own data. This is the first runtime use of the game data; the original executable is not run.
-3. Add parsers for the game's data resources (`STRL`, `BYTS`, `INTS`) with unit tests on synthetic fixtures, then implement the M1 rules in `gameplay-spec.md` §4.
-4. Owner's choice, recorded but not needed yet: publish the fork on GitHub and aim for upstream submission. Follow ScummVM code style in the meantime.
+**Prototype status (2026-10-13):**
+- **Done:** wired the `csworld` subengine (item 1 of the earlier plan); opened all 15 archives; rendered a country panorama with its palette and a witness's first frame; played a Cinepak clip; adopted the true-color screen with an 8-bit back buffer; and added development PNG dumps.
+- **Uncommitted:** the fork changes are local only. Commit them when the owner asks.
+- **Running it:**
+  1. Build: `./configure --disable-all-engines --enable-engine=mohawk,cstime,csworld,myst,mystme,riven --enable-debug && make -j8`.
+  2. Run: `./scummvm --config=/private/tmp/witwics96-scummvm.ini csworld-win`.
+  3. The ini has a `[csworld-win]` section with `gameid=csworld`, `engineid=mohawk`, and `path=<repo>/input`, plus the optional development keys listed in findings.
+  4. The live window works too: arrow keys scroll and change country, and space pauses.
+
+**Architecture (decided):**
+- **Engine:** a `csworld` subengine in ScummVM's `engines/mohawk`, reusing `MohawkArchive`, `MohawkBitmap`, `VideoManager` (QuickTime/Cinepak/CDToons), and ScummVM's macOS packaging.
+- **Screen:** true color, with an 8-bit back buffer and a panorama buffer converted using the merged game palette.
+- **Code layout:** pure data and logic in `csworld_data.*`, unit-tested with synthetic fixtures under `test/engines/csworld/`.
+- **Game data:** the user adds their own game folder in ScummVM; nothing is copied.
+
+**Closed 2026-10-13:**
+- **Scene composition** is implemented from code analysis.
+- **CDToons** variant is fixed.
+- **Data readers** are tested (411/411).
+- **Interface panel** is drawn: `C2K tBMP 90`.
+
+**Carried into Phase 4:** witness placement in panorama coordinates; mouse edge scrolling; the interface palette overlap; the night palette; and regression-testing the CDToons fix against `cstime` before any upstream submission.
 
 **Exit criteria:** Documented architecture decision, buildable prototype, and repeatable development setup.
 
-### Phase 4 — Implementation, validation, and packaging (blocked on prior phases)
+### Phase 4 — Implementation, validation, and packaging (next)
 
 Implement in small vertical slices. Keep tests and fixtures free of copyrighted payloads. Validate functionality on declared macOS targets, include failure handling for missing/incompatible user-provided data, and ensure packaging does not silently include ignored local files.
 
