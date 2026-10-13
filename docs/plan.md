@@ -16,7 +16,7 @@ Create a playable macOS port of the 1990s Windows game identified by the project
 
 - [x] Establish repository agent guidance and the local game-copy ignore rule.
 - [x] Record the initial metadata-only inventory and open questions.
-- [ ] **In progress:** Identify the supplied release/build and map its executables, data files, and runtime dependencies. The supplied readme documents v3.0 (dated 1996-04-24); a 16-bit executable candidate is identified, but its code and the package's complete contents are not yet analyzed.
+- [ ] **In progress:** Identify the supplied release/build and map its executables, data files, and runtime dependencies. The supplied read-me documents v3.0 (dated 1996-04-24); 16-bit setup files identify the NE game candidate and the 32-bit installer declares `Carmen32.exe` inside `ARCHIVE.C2K`. The 32-bit executable and archive contents have not been inspected.
 - [ ] Describe the core gameplay loop and define a testable minimum playable scope.
 - [ ] Choose and document the macOS implementation and local asset-loading strategy.
 - [ ] Implement the smallest end-to-end playable slice.
@@ -36,19 +36,19 @@ Create a playable macOS port of the 1990s Windows game identified by the project
 
 **Questions:** What exact build is represented? Which files are the game executable, resources, data, codecs, or installers? What host/runtime assumptions are supported by static evidence?
 
-**Observed progress (2026-10-12):** The supplied `input/README.TXT` identifies itself as a v3.0 read-me dated 1996-04-24 and documents Windows 3.1/Windows 95 versions and QuickTime 2.1 usage. `input/SETUP.CFG` declares a 558,608-byte `CARMEN` source to be installed as `carmen.exe`; `input/SETUP16/CARMEN` matches the size and is identified as a Windows 3.x NE executable. Its SHA-256 is recorded in `docs/findings.md`. The setup mapping plus file identity makes it a strong game-executable candidate, not authenticated runtime evidence.
+**Observed progress (2026-10-12):** The supplied `input/README.TXT` identifies itself as a v3.0 read-me dated 1996-04-24 and documents Windows 3.1/Windows 95 versions and QuickTime 2.1 usage. `input/SETUP16/CARMEN.INF` maps a 558,608-byte `CARMEN` source to installed `carmen.exe`; `input/SETUP16/CARMEN.BDF` also maps the `CARMEN` entry to `carmen.exe`, and `input/SETUP16/CARMEN` matches the size and is identified as a Windows 3.x NE executable. Its SHA-256 is recorded in `docs/findings.md`. These setup declarations plus file identity make it a strong 16-bit game-executable candidate, not authenticated runtime evidence. Separately, `input/SETUP.CFG` selects 16-bit and 32-bit installer programs; `input/SETUP32/SETUP32.INI` declares installed `Carmen32.exe` from `input/SETUP32/ARCHIVE/ARCHIVE.C2K`, but no loose `Carmen32.exe` was found and the archive has not been read or unpacked.
 
-**Tool status:** The installed `reverse-engineer-anything` Claude skill was read (version 40). REA 6.4.0 is connected and reports Ghidra 12.1.4 on macOS arm64 as available; Hopper is unavailable. Ghidra `open_binary` rejects the NE candidate and root `SETUP.EXE`, so no code analysis has yet occurred. Use the actual session tool inventory, not assumptions in the skill, if the provider/session changes.
+**Tool status:** The installed `reverse-engineer-anything` Claude skill was read (version 40). REA 6.4.0 is connected and reports Ghidra 12.1.4 on macOS arm64 as available; Hopper is unavailable. Ghidra `open_binary` rejects the NE candidate and root `SETUP.EXE`. Apple LLVM `objdump` 21.0.0 also rejected the NE candidate, and `xcrun` could not locate `llvm-readobj`. Bounded local checks did not find an NE parser, an InstallShield extractor, or a Mohawk reader. No code analysis has yet occurred. Use the actual session tool inventory, not assumptions in the skill, if the provider/session changes.
 
 **Next actions:**
-1. Determine whether the media also contains a distinct 32-bit game executable and map likely setup payloads using filenames and static metadata only; do not run setup.
-2. Identify the `.MHK` resource format using a narrowly selected file and a supported static parser, if available. Do not bulk extract.
-3. Check for an already available NE-capable analysis route before considering new tools. Do not install tools or execute the game/setup as an unrequested workaround.
-4. Record any new artifact hashes, source paths, tool identity, provider limitations, and unanswered questions in `docs/findings.md`.
+1. If a read-only InstallShield Z parser is already available, inspect the `ARCHIVE.C2K` inventory to verify whether it contains `Carmen32.exe` and map the declared installation payload. Do not run setup or add extracted proprietary files to Git.
+2. Identify an already available Mohawk/MHWK parser and validate one representative `.MHK` archive structurally; do not bulk extract.
+3. Check for an existing NE-capable analysis route. Hopper is not installed; before asking to install it, verify that the chosen tool supports this Windows 3.x NE target. Do not install tools or execute the game/setup without an explicit decision.
+4. Record new hashes, source paths, tool identity, provider limitations, and unanswered questions in `docs/findings.md`.
 
-**Validation performed:** `git check-ignore -v input` confirms `/input/` is ignored; `git ls-files -- input` returned no tracked paths. `file`/`shasum` were used only for read-only type/identity checks. `open_binary` returned `target_unavailable` for the two NE targets. No extraction, modification, game/setup execution, build, or tests were performed.
+**Validation performed:** `git check-ignore -v input` confirms `/input/` is ignored; `git ls-files -- input` returned no tracked paths. `find`/`file`, `od`, `strings`, and `shasum` were used for read-only inventory, header, static-string, and identity checks. `open_binary` returned `target_unavailable` for the two NE targets; Apple LLVM `objdump` did not recognize the NE candidate. No extraction, modification, game/setup execution, build, or tests were performed.
 
-**Exit criteria:** Findings document identifies supported artifact/build evidence, the game executable and key data-file identities, dependency evidence and limits, plus unresolved format/runtime questions. All payloads remain untracked. Current evidence is not sufficient to exit Phase 1.
+**Exit criteria:** Findings document identifies supported artifact/build evidence, the game executable and key data-file identities, dependency evidence and limits, plus unresolved format/runtime questions. The 32-bit executable is currently only an installer declaration within an uninspected archive. All payloads remain untracked. Current evidence is not sufficient to exit Phase 1.
 
 ### Phase 2 — Behavior and playable-scope definition (blocked on Phase 1)
 
@@ -74,7 +74,7 @@ Implement in small vertical slices. Keep tests and fixtures free of copyrighted 
 
 ## Risks and unresolved decisions
 
-See `docs/findings.md` for the detailed open-question list. Immediate blockers are incomplete build identity, unverified data formats/runtime behavior, and the lack of a connected NE-capable analyzer for the identified game-executable candidate (Ghidra rejects NE; Hopper is unavailable). The macOS target/implementation strategy is undecided. Legal rights to redistribute the game or its assets are not established; do not include those payloads.
+See `docs/findings.md` for the detailed open-question list. Immediate blockers are incomplete build identity, unverified archive/resource formats and runtime behavior, and the lack of a connected NE-capable analyzer for the identified 16-bit game-executable candidate (Ghidra and the checked `objdump` route reject it; Hopper is unavailable). The declared 32-bit `Carmen32.exe` remains unverified inside an InstallShield archive. The macOS target/implementation strategy is undecided. Legal rights to redistribute the game or its assets are not established; do not include those payloads.
 
 ## Session handoff checklist
 
