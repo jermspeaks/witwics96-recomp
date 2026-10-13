@@ -17,7 +17,7 @@ Create a playable macOS port of the 1990s Windows game identified by the project
 - [x] Establish repository agent guidance and the local game-copy ignore rule.
 - [x] Record the initial metadata-only inventory and open questions.
 - [x] Identify the supplied release/build and map its executables, data files, and runtime dependencies (Phase 1, closed 2026-10-12; unknowns carried forward in `docs/findings.md`).
-- [ ] **Next:** Describe the core gameplay loop and define a testable minimum playable scope.
+- [ ] **In progress:** Describe the core gameplay loop and define a testable minimum playable scope. A draft is in `docs/gameplay-spec.md`, with 6 open code questions.
 - [ ] Choose and document the macOS implementation and local asset-loading strategy.
 - [ ] Implement the smallest end-to-end playable slice.
 - [ ] Add automated tests/fixtures that do not contain copyrighted game payloads.
@@ -48,15 +48,20 @@ To use the toolchain, set `RUSTUP_HOME`/`CARGO_HOME` to the `rustup`/`cargo` sub
 
 **Carried-forward unknowns:** Media authenticity; where `SYSTEM.MHK`, `MOHAWK.INI`, `MIDIMAP.DAT`, `QTIM32.DLL`, and `CMGR32.DLL` come from; the structure of the other 14 `.MHK` files; and all runtime behavior.
 
-### Phase 2 — Behavior and playable-scope definition (next)
+### Phase 2 — Behavior and playable-scope definition (in progress)
 
 **Questions:** What is the essential game loop, what state/resources drive it, and what can be reliably tested?
 
+**Progress (2026-10-12):** The draft spec `docs/gameplay-spec.md` covers the loop, end states, the archive/data model, and proposed M1 acceptance criteria. All 15 `.MHK` directories are surveyed. Clue pools, the country/loot/geo tables, the crook roster, and the trait table are identified from data, but not yet confirmed in code. The build is pinned to ScummVM's `csworld` v3.0 detection hash. The owner approved extracting `Carmen32.cfg`/`mohawk.w32`; it was done, and neither locates `SYSTEM.MHK`. The owner chose Apple Silicon on recent macOS as the target.
+
+**Helpers (outside Git, `/private/tmp/witwics96-tools/`):** `mhk_types.py` (directory summary), `mhk_strl.py` (string-list summary), `mhk_peek.py` (hexdump of one resource), `mhk_clue_fields.py` (clue prefix tabulation), and `extract-allowed` (allowlisted archive extractor). Run Python with `-I` from `/private/tmp`. Do not paste game text into the repository.
+
 **Next actions:**
-1. Open `/private/tmp/witwics96-verify/Carmen32.exe` in REA/Ghidra. Use `search_strings` + `xrefs` to find the code that uses `MOHAWK.INI`, `SYSTEM.MHK`, the `.MHK` names, the movie templates (`%sLOCN%d.MOV` and others), `Fame.Dat`/`User.Dat`, and `CDTInit`. Then decompile those procedures to recover startup, resource loading, and the case/travel/warrant/arrest loop. Record Evidence IDs.
-2. Determine whether `Carmen32.cfg`/`mohawk.w32` config values (not yet extracted) are needed. Ask before extracting any further archive member.
-3. Use the 16-bit NE (win16ne `-d`) only to cross-check behavior where the 32-bit build is ambiguous.
-4. Extend the Mohawk structural check to the other `.MHK` files and list resource types per file (metadata only), so data needs can be mapped to gameplay.
+1. In Ghidra, answer `gameplay-spec.md` §5 Q1–Q3 (case generation, battery cost, witness clue selection). Start from `FUN_00429f68` (location movie selection) and `FUN_00422880` (database init). Find the code that reads `C2K` `STRL 30000+`, `BYTS 101`, and `COUNTRY INTS 2006`: search for the immediate constants `30000`/`0x7530`, `101`, and `2006`/`0x7d6`. Rename confirmed functions with `set_address_name`, and record Evidence IDs.
+2. Fix Ghidra's Borland register calling convention where it matters, or read `procedure_assembly`, so arguments aren't lost.
+3. Q4 (save format): `FUN_00425322` (`Fame.Dat`) and the `User.Dat` reference.
+4. Q5: determine whether M1 needs `tSCR` interpretation, or whether a static frame from `tBMH`/`tBMP` is enough.
+5. Once Q1–Q3 are answered, finalize the M1 acceptance criteria and close Phase 2.
 
 Derive candidate behavior from static evidence; use runtime observation only for questions static evidence cannot answer and only with explicit, bounded scope. Record observed behavior separately from inferred behavior. Define a small playable milestone, controls, save/state needs, and asset-loading boundary.
 
@@ -64,7 +69,7 @@ Derive candidate behavior from static evidence; use runtime observation only for
 
 ### Phase 3 — macOS design and prototype (blocked on Phase 2)
 
-**Questions:** Which technology and rendering/input/audio approach fit the verified formats and target macOS versions?
+**Questions:** Which technology and rendering/input/audio approach fit the verified formats and target macOS versions? Target: Apple Silicon, recent macOS (owner, 2026-10-12). Main option A is a new `csworld` engine inside ScummVM (GPLv3), reusing ScummVM's Mohawk archive, bitmap, sound, and QuickTime support and its macOS packaging. Option B is a standalone native Swift/SDL app with clean-room decoders. Owner decision needed.
 
 **Next actions:** Compare the simplest viable clean-room/native or compatibility-oriented options against established requirements. Build a thin prototype with synthetic/test-owned assets before implementing game-specific behavior. Decide how a user points the program at local game data without copying that data into the repository or package.
 
