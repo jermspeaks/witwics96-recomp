@@ -1,6 +1,6 @@
 # Project Plan
 
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 
 This is the handoff plan. Keep statuses current so a new agent can resume without repeating work. A completed phase means its stated outputs exist and its validation is recorded; it does not mean the whole port is complete.
 
@@ -56,12 +56,12 @@ To use the toolchain, set `RUSTUP_HOME`/`CARGO_HOME` to the `rustup`/`cargo` sub
 
 **Helpers (outside Git, `/private/tmp/witwics96-tools/`):** `mhk_types.py` (directory summary), `mhk_strl.py` (string-list summary), `mhk_peek.py` (hexdump of one resource), `mhk_clue_fields.py` (clue prefix tabulation), and `extract-allowed` (allowlisted archive extractor). Run Python with `-I` from `/private/tmp`. Do not paste game text into the repository.
 
+**Progress (2026-10-13):** Code-level rules for case generation, battery, witness clues, arrest, promotion, and movie selection are recorded in findings and spec §§1–3. The `tSCR` framing is validated on 3,820 scripts. ScummVM's Mohawk `View`/`Feature` framework already loads `tCNT`, `tSCR`, and `tBMH`.
+
 **Next actions:**
-1. In Ghidra, answer `gameplay-spec.md` §5 Q1–Q3 (case generation, battery cost, witness clue selection). Start from `FUN_00429f68` (location movie selection) and `FUN_00422880` (database init). Find the code that reads `C2K` `STRL 30000+`, `BYTS 101`, and `COUNTRY INTS 2006`: search for the immediate constants `30000`/`0x7530`, `101`, and `2006`/`0x7d6`. Rename confirmed functions with `set_address_name`, and record Evidence IDs.
-2. Fix Ghidra's Borland register calling convention where it matters, or read `procedure_assembly`, so arguments aren't lost.
-3. Q4 (save format): `FUN_00425322` (`Fame.Dat`) and the `User.Dat` reference.
-4. Q5: determine whether M1 needs `tSCR` interpretation, or whether a static frame from `tBMH`/`tBMP` is enough.
-5. Once Q1–Q3 are answered, finalize the M1 acceptance criteria and close Phase 2.
+1. Close the remaining spec §5 items that M1 needs: where the warrant flags are set, and which UI the rank-costed actions belong to. `User.Dat` layout, flight-time display, and the `tSCR` opcodes not yet understood can move to later milestones.
+2. Then finalize the M1 acceptance criteria and mark Phase 2 complete.
+3. Phase 3 default (owner may override): a separate ScummVM fork in a sibling folder on a `csworld` branch, following upstream conventions. This repo keeps docs, research helpers, and synthetic fixtures.
 
 Derive candidate behavior from static evidence; use runtime observation only for questions static evidence cannot answer and only with explicit, bounded scope. Record observed behavior separately from inferred behavior. Define a small playable milestone, controls, save/state needs, and asset-loading boundary.
 
@@ -69,7 +69,7 @@ Derive candidate behavior from static evidence; use runtime observation only for
 
 ### Phase 3 — macOS design and prototype (blocked on Phase 2)
 
-**Questions:** Which technology and rendering/input/audio approach fit the verified formats and target macOS versions? Target: Apple Silicon, recent macOS (owner, 2026-10-12). Main option A is a new `csworld` engine inside ScummVM (GPLv3), reusing ScummVM's Mohawk archive, bitmap, sound, and QuickTime support and its macOS packaging. Option B is a standalone native Swift/SDL app with clean-room decoders. Owner decision needed.
+**Questions:** Which technology and rendering/input/audio approach fit the verified formats and target macOS versions? Target: Apple Silicon, recent macOS (owner, 2026-10-12). **Decision (owner, 2026-10-13): option A.** Build a clean-room `csworld` engine inside ScummVM (GPLv3). It reuses ScummVM's Mohawk archive, bitmap, palette, and sound support, its QuickTime playback, and its macOS packaging. The rejected alternative was a standalone native Swift/SDL app.
 
 **Next actions:** Compare the simplest viable clean-room/native or compatibility-oriented options against established requirements. Build a thin prototype with synthetic/test-owned assets before implementing game-specific behavior. Decide how a user points the program at local game data without copying that data into the repository or package.
 
