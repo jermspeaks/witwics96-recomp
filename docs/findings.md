@@ -187,7 +187,80 @@ Summary and proposed milestone: [`gameplay-spec.md`](gameplay-spec.md).
   - **Full cases:** two complete scripted cases ran end to end — one won with a correct warrant, one lost with no warrant — each followed by a new case.
   - **Movies:** outcome movie names exist (`WINA01–11`, `WINB01–11`, `LOSE{PWR,NOW,WRG,PER}1–5`, `LOOT00+`).
   - **Tests:** `make test` runs 422/422 OK.
-  - **Not yet done:** interactive mouse play by a person, lip-sync/talk animation, the original's save-clue-on-click rule, balloon mouth anchoring, guides and almanac, the Carmen endgame movies, sign-in, and saves.
+  - **Cursor (Observed, `Carmen32.exe` 0x450da8 and 0x44f58e):** at startup the original loads `IDC_ARROW` (0x7f00). Its cursor setter maps 0–3 to the system cursors (0x7f00/0x7f03/0x7f01/0x7f02); any other value points to a 68-byte record laid out like a Mac `CURS` (16×16 data, mask, big-endian hotspot at +0x40), which goes to `CreateCursor`. Where these records come from is **Unknown**. The port shows a standard arrow. Hiding it during movies is **Inferred**.
+  - **Save clue on click:** the notebook now saves a clue only when its balloon is clicked (scripted `note` action checked: one clicked clue saved, the next unclicked answer not saved).
+  - **Owner playtest (2026-10-13):** with a mouse, edge scrolling and witness selection work; the missing cursor has been fixed. The owner also reported balloons far from their speakers.
+  - **Balloon fix:** the port had used the character script's header box, which is much wider than the character. Selection, centering and balloon placement now use the area the shapes actually cover, and the balloon's tail tip is placed at the head. Checked with screen dumps of both balloon orientations (India, Kenya). The original's exact anchor (the mouth rectangle) is **Unknown**.
+  - **Character face layers (Observed, `CHR*.MHK` `tSCR`, 2026-10-13):** All of a person's scripts share one screen coordinate space centered near x≈300. Header words 8–11 are the box in that space, and opcode 6 offsets are relative to the box's top-left.
+    - k4 (idle) = k5 (body and head, no face) + k17 (eyes) + k9 (mouth).
+    - The eye and mouth boxes equal the k4 box plus that slot's offset, for both facings and for a second person.
+    - k9–16 are single-frame mouth shapes; k9 is the rest shape used in k4.
+    - k17 is the eyes open; k18 is a 3-frame blink and k19 a 4-frame eye movement.
+    - k6–8 are multi-frame head movements, and k0–3 are walk/turn sequences.
+  - **Talk animation (implemented):** witnesses are drawn as k5 + eyes + mouth. They blink at random 2–6 s intervals, and while the voice plays the mouth changes every 100 ms to a random shape from k10–16. The timing and random mouth choice are **Inferred**; the original's lip-sync source is **Unknown**, and head movements k6–8 are not used. Screen dumps (Cambodia idle, China mid-speech) show the faces aligned.
+  - **Cursors (Observed, `Carmen32.exe`):** all 24 calls to the game's cursor wrapper (0x410f50) pass 0 (arrow) or 3 (`IDC_WAIT`). The `CURS`-style path in the cursor setter is only reached from Mohawk library code (0x45d353). The port's arrow therefore matches the game; the brief wait cursor is not reproduced.
+  - **Interface palette (Observed in practice):** the panel frame, excluding the city map, buttons, strip text, notebook and gauge, is pixel-identical across 7 screen dumps of different scenes (including Sweden, Cambodia, China, India and Kenya). No visible palette clash has been seen, but the mechanism is still **Unknown**.
+  - **Quit (Inferred):** the only "Quit" string in `Carmen32.exe` sits beside developer-tool labels ("Country", "People", "Day/Nite", "Calc. Size", "Sky Only"), so it is likely not a player control. The port relies on ScummVM's menu (Cmd/Ctrl+F5) and the window close button.
+- **Observed (M2 research, 2026-10-13; static analysis by four agents, specs in `/private/tmp/witwics96-m2/*.md`, outside Git):**
+  - **Clock:** there are two 12-hour clocks: a reference (GMT) clock at `0x479dd8` and the local clock at `0x477e79`.
+    - Local time is the reference plus the current country's zone. Zones come from `C2K BYTS 103`: records of {s8 hours, u8 minutes, count, countries…} ending with a zero count.
+    - A case starts at 8–11 PM reference time (`0x411bc9`).
+    - Each tick moves to the next quarter hour plus 0–14 random minutes, every 400 × 33 ms, and is paused while the flight panel is open.
+    - A flight adds 11 min per grid step between `COUNTRY INTS 2004` positions, rounded up to a quarter hour and capped at 20 h (`0x41a581`). Questions cost no time.
+  - **Flight screen:** hovering a destination shows Leaving, Flight Time, Time Zones Crossed and Arriving in, in IntH12 at (116,251)–(318,307), with values at x=256 (`0x41f9ae`).
+  - **Night:** local 8:00 PM–4:59 AM (`0x41a8c6`).
+    - It is applied at once on arrival; a later change fades over 65 steps of ~1 s.
+    - Sky 128–143 goes to ×1/100, country 144–239 to ×60/100 and 240–244 to ×20/100. Lights 10–15 blend toward six fixed colours (`0x41a977`).
+    - There is no night-sky art. A "Day/Nite" toggle exists only in a hidden debug browser.
+  - **Evidence:** `STRL 210` = 60 × {group, image, font, text}, where group 1–15 encodes trait + value. `BBOX 210` is the text box inside each close-up.
+    - Pictures: close-up `tBMP 209+image`, sprite `tBMP 210+image`.
+    - Placement: traits go to slots 1..L. The stop counter is already L−1 at the first stop, so slot L is never read: a trait is always lost at ranks 0–1, and lost with probability 4/L above that (`0x41c412`, `0x420704`).
+    - The sprite is drawn at a random x (0–3892) that is off-screen on arrival, with its bottom at y=307. Clicking it centres the view and shows the close-up; the text can be saved to the notebook. It is free and can be reopened.
+  - **Guides:** each country has a guide (`COUNTRY BYTS 2001`, values 1–7).
+    - A free tour unlocks that guide: walk-in scene `14000+300g+100r`, stops from `GUIDES INTS 14000`, narration `tWAV 16300+10c+i`.
+    - Asking an unlocked guide costs battery (2–5 by rank) and plays one line `tWAV 16100+25g+line`. The line depends only on how many entered warrant fields are correct.
+    - Each unlock buys one question.
+  - **Almanac:** a free-to-browse database of 58 documents in `DATABASE BYTS 20099+doc`, with flag, map, video and photo views.
+    - Only Find costs battery (3–5 by rank), even with no hits. It is a case-insensitive substring search.
+  - **Saves:** `User.Dat` = N × 241-byte player records plus an XOR byte (max 50, sorted by name). `Fame.Dat` = 20-byte names plus an XOR byte. A case cannot be resumed.
+- **Implemented (2026-10-13):** the clock with time zones and flight times (`csworld_clock.*`, unit-tested), the flight hover box, the night palette with fade, notebook entries headed by place and local time, and physical evidence (placement with the original's lost-trait behaviour plus a fix option, the in-scene item, the close-up, saving to the notebook).
+  - **Also implemented (2026-10-13):**
+    - **Guides:**
+      - The "Videophone" popup (tab 66,327) lists unlocked guides.
+      - Asking costs battery and plays the warrant-verdict line while the guide talks in the screen.
+      - Request Guide runs the tour: arrival scene, intro, walking to `INTS 14000` stops, narration, "Tell me more…" after every 2 stops, ending with "Thank you, goodbye", farewell lines. Unlocking is pending until the next flight.
+      - **Inferred deviation:** the view follows the walking guide, whereas the original makes the player scroll after them.
+    - **Almanac:**
+      - World Wiz Database (tab 28,327): 58-entry index; document pages with flag, map, photos or LOCN video; scrollable text; glossary layout.
+      - Find typed in the strip costs battery; "k of N" match arrows, with the hit in red.
+      - Not done: almanac music, Hall of Fame and Game Options tabs.
+    - **Sign-in and saves:**
+      - The sign-in screen (`tBMP 174`) supports typing a name, list, Play, Delete with confirmation, and a skip-opening checkbox (ScummVM `skip_opening`).
+      - `User.Dat` and `Fame.Dat` use the original layout (`csworld_save.*`, unit-tested), saved as `<target>-User.Dat` / `<target>-Fame.Dat` in the ScummVM save folder.
+      - Progress is written at sign-in, case start, case end and exit. A Carmen win retires the player and appends `Fame.Dat`.
+- **Observed (movies, arrest, endgame; static analysis, spec `movies-endgame.md` outside Git):**
+  - **Movie function:** `cw_PlayMovie 0x429f68` has 17 kinds. All clips except OPENING and 40CARAR8 are 200×152 and play in the Videophone screen (216,112,416,264).
+  - **No-repeat picks** (`0x4675aa`) probe upward from a random value. Their 17 bitsets live in the player record at +0x7c.
+  - **Arrest:** `tSCR 42500+250·crook+facing` in ARREST1 (crooks 0–19) or ARREST2 (20–38). Op 4 is milliseconds per frame. Sound `tWAV 42500+250·crook`.
+  - **Newspaper:** `tSCR 410` (win), `420` (loss) or `430` (Carmen). The headline (NewH24) and subline come from `STRL 100` 51–64, with placeholders %v/%r/%n/%c/%k/%l. A win adds villain poster `tBMP 450+crook` and the crook's voice line 56.
+  - **Win:**
+    - WINA plays first. A first win never gets 02 or 03, and Carmen gets ENDING1 instead.
+    - Next comes the mug shot `tBMP/tWAV 9500+crook` with the name.
+    - On promotion, image/sound `9549+rank` and `PROMO0{rank}` replace WINB.
+    - At wins 1/6/12/17/21/27/32/38, an "award" image `9600+crook` with sound `9600+n` is shown (inferred: Carmen's taunts).
+    - The win ends with WINB, or ENDING3 → ENDING4 → Hall of Fame → sign-in for Carmen.
+  - **Loss:** LOSE* by cause, or LOSEFIN2 for Carmen, which also lowers the caught count by 3 and frees 3 caught crooks.
+  - **Hints:** GREET after sign-in (GREET01 for new players), HELP from The Chief by situation, JANITOR/EXTRA1–4/6 for rookies and first cases, FNLBRF at the final stop for rookies with a warrant or for Carmen.
+- **Implemented (2026-10-13):**
+  - **Movie playback:** Videophone movie playback with no-repeat picks saved per player, plus the greeting, The Chief's help, LOOT, and the rookie/first-case hint triggers.
+  - **Outcome sequences:** the arrest animation in the scene, the newspaper with formatted headlines, the WINA → mug shot → promotion/award → WINB sequence, loss movies, and the full Carmen win/loss flow.
+  - **Hint timing (inferred):** the "which hop" numbering of JANITOR/EXTRA1 is inferred, because the two analyses disagree on whether the opening flight counts down the stops.
+  - **Checks:**
+    - Log and screen dumps show the arrest walk-in, the spinning newspaper, the loss paper ("…PRESENTS IMPROPER WARRANT!"), the win paper with poster, and the mug shot.
+    - A scripted Carmen case ran JANITOR4, Extra1, FNLBRF6, 40CarAR8, the 430 paper, ENDING1, ENDING3, ENDING4 and the fame sounds.
+  - **Tests:** 442/442 OK. `csworld_simulate=100` gives 800/800 wins. Screen dumps were checked for the Videophone with a guide speaking, tour arrival/stand/walk, the almanac index, a flag page, a Find hit, the glossary, and the sign-in list.
+  - **Screen dumps:** night in Austria (black sky, lit windows); a Nigeria→Russia flight box (12:00 AM + 9:30 = 11:30 AM local, 2 zones); evidence close-ups in Hungary and Afghanistan; a notebook entry from evidence.
+  - **Not yet done:** head movements while talking, balloon mouth anchoring, guides and almanac, the Carmen endgame movies, sign-in, and saves.
 
 ## Evidence and change log
 

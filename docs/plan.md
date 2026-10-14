@@ -102,7 +102,7 @@ To use the toolchain, set `RUSTUP_HOME`/`CARGO_HOME` to the `rustup`/`cargo` sub
 - **Rules module:** `engines/mohawk/csworld_game.{h,cpp}` implements the rank tables, route length, guide/almanac costs, the clue difficulty window, promotion, crook and start-country selection (bounded, with no retry loops), the battery, warrant issue/change/validation, and arrest outcome order (no warrant → wrong warrant → wrong person, matching the original's movie selection).
 - **Randomness:** an injectable `CSWorld::Random` interface allows deterministic tests.
 - **Tests:** `test/engines/csworld/game.h` adds 7 tests; `make test` runs 418/418 OK.
-- **Edge scrolling:** the engine scrolls when the mouse is in the 20-px edge strips, accelerating 1→15 px per step. It builds, but hasn't been tested with a real mouse. The step period is an assumption.
+- **Edge scrolling:** the engine scrolls when the mouse is in the 20-px edge strips, accelerating 1→15 px per step. The owner confirmed on 2026-10-13 that edge scrolling and witness selection work with a real mouse. The step period is an assumption.
 - **Trail and witness rules:** implemented and tested (`csworld_trail.*`, 422/422 tests, 1,600 simulated real-data cases). The engine runs a real case on screen, with dev keys for flights.
 - **Interface:** layout resolved from code and implemented. A full case is playable in the engine: questioning, notebook, battery, flight popup, Digisketch warrant, arrest, outcome movie, then a new case. Verified with scripted actions and screen dumps on the user's data; it has not yet been played by a person with a mouse.
 
@@ -114,9 +114,9 @@ To use the toolchain, set `RUSTUP_HOME`/`CARGO_HOME` to the `rustup`/`cargo` sub
 **Next slices:**
 1. ~~Trail and witness rules, plus tests~~ (done).
 2. ~~Witness questioning, flight screen, warrant UI, arrest with outcome movies, battery gauge~~ (done 2026-10-13).
-3. **Owner playtest of M1** with a mouse; fix what it finds.
-4. **M1 polish:** the original's save-clue-on-click, balloon mouth anchoring, and talk/lip-sync animation (`tSCR` k 5–16).
-5. **M2+:** guides, almanac, trait-evidence items, the Carmen endgame, sign-in, saves (`User.Dat`/`Fame.Dat`), and the night palette.
+3. **Owner playtest of M1** with a mouse. First report (2026-10-13): no visible cursor; fixed with the system arrow, hidden during movies.
+4. ~~**M1 polish:**~~ (done 2026-10-13): save-clue-on-click; balloon anchoring (tail tip at the head; the original's exact anchor is unknown); talk animation (face layers, blinking, mouth while speaking; lip-sync is approximate). Cursors match the original (arrow only). The panel palette shows no clash across 7 dumps. Quitting is via ScummVM's menu. Optional extras: head movements k6–8, walk-in k0–3.
+5. **M2 (in progress 2026-10-13):** ~~clock, flight-time display, night palette~~, ~~trait evidence~~, ~~guides (tour + ask)~~, ~~almanac (browse + Find)~~, ~~sign-in and saves~~. ~~Movie selection, arrest animation and newspaper, the Carmen endgame, the Hall of Fame tab~~ (done). Remaining: the almanac Game Options tab and music, Explore mode, Carmen's "award" interlude UI (only partly known), and an owner playtest of M2. Specs: `/private/tmp/witwics96-m2/{clock-night,evidence-saves,guides,almanac}.md` (outside Git; summarized in `findings.md`).
 
 Implement in small vertical slices. Keep tests and fixtures free of copyrighted payloads. Validate functionality on declared macOS targets, include failure handling for missing/incompatible user-provided data, and ensure packaging does not silently include ignored local files.
 
